@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import streamlit as st
-import plotly.graph_objects as go
+#import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
 
@@ -67,30 +67,30 @@ def engineering_constants(A,h):
     nuxy=-S[0,1]/S[0,0]
     return Ex,Ey,Gxy,nuxy
 
-def plot3D(layers):
-    z=0
-    fig=go.Figure()
+# def plot3D(layers):
+#     z=0
+#     fig=go.Figure()
 
-    for l in layers:
-        t=l['t']; th=l['theta']
-        x=[0,1,1,0,0,1,1,0]
-        y=[0,0,1,1,0,0,1,1]
-        zc=[z,z,z,z,z+t,z+t,z+t,z+t]
+#     for l in layers:
+#         t=l['t']; th=l['theta']
+#         x=[0,1,1,0,0,1,1,0]
+#         y=[0,0,1,1,0,0,1,1]
+#         zc=[z,z,z,z,z+t,z+t,z+t,z+t]
 
-        color=f"hsl({(th%180)*2},70%,50%)"
+#         color=f"hsl({(th%180)*2},70%,50%)"
 
-        fig.add_trace(go.Mesh3d(x=x,y=y,z=zc,color=color,opacity=0.85))
-        fig.add_trace(go.Cone(
-            x=[0.5],y=[0.5],z=[z+t/2],
-            u=[np.cos(np.radians(th))],
-            v=[np.sin(np.radians(th))],
-            w=[0],showscale=False
-        ))
+#         fig.add_trace(go.Mesh3d(x=x,y=y,z=zc,color=color,opacity=0.85))
+#         fig.add_trace(go.Cone(
+#             x=[0.5],y=[0.5],z=[z+t/2],
+#             u=[np.cos(np.radians(th))],
+#             v=[np.sin(np.radians(th))],
+#             w=[0],showscale=False
+#         ))
 
-        z+=t
+#         z+=t
 
-    fig.update_layout(height=400,margin=dict(l=0,r=0,t=20,b=0))
-    return fig
+#     fig.update_layout(height=400,margin=dict(l=0,r=0,t=20,b=0))
+#     return fig
 
 # =========================================================
 # SIDEBAR
@@ -230,9 +230,9 @@ with col1:
     c3.metric("Gxy (GPa)",f"{Gxy/1e9:.2f}")
     c4.metric("νxy",f"{nuxy:.3f}")
 
-with col2:
-    st.subheader("3D Laminate")
-    st.plotly_chart(plot3D(layers),use_container_width=True)
+# with col2:
+#     st.subheader("3D Laminate")
+#     st.plotly_chart(plot3D(layers),use_container_width=True)
 
 # =========================================================
 # ABD OUTPUT
