@@ -1,21 +1,36 @@
 import numpy as np
-import pandas as pd
 import streamlit as st
 
 st.set_page_config(layout="wide")
 
 # =========================================================
-# COMPACT UI
+# UI TUNING
 # =========================================================
 st.markdown("""
 <style>
-.block-container {padding-top: 1rem;}
+.block-container {padding-top: 2rem;}
 h2, h3 {margin-bottom: 0.3rem;}
-label {font-size: 0.85rem;}
+
+/* Reduce metric font size */
+div[data-testid="stMetricValue"] {
+    font-size: 16px !important;
+}
+div[data-testid="stMetricLabel"] {
+    font-size: 11px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
 THRESHOLD = 1e-8
+
+# =========================================================
+# MATERIAL DATABASE
+# =========================================================
+MATERIAL_DB = {
+    "Carbon/Epoxy": (135.000, 10.000, 5.000, 0.300),
+    "Glass/Epoxy": (40.000, 10.000, 4.000, 0.280),
+    "Kevlar/Epoxy": (70.000, 5.000, 2.500, 0.340)
+}
 
 # =========================================================
 # FUNCTIONS
@@ -69,12 +84,12 @@ def compute_ABD(layers):
 
     return clean(A),clean(B),clean(D),h
 
-def engineering_constants(A,h):
-    S=np.linalg.inv(A)
+def engineering_constants_from_Q(Qbar):
+    S = np.linalg.inv(Qbar)
     return (
-        1/(h*S[0,0]),
-        1/(h*S[1,1]),
-        1/(h*S[2,2]),
+        1/S[0,0],
+        1/S[1,1],
+        1/S[2,2],
         -S[0,1]/S[0,0]
     )
 
@@ -84,53 +99,71 @@ def build_symmetric_laminate(layers, symmetric):
 def check_symmetry(B, tol=1e-6):
     return np.all(np.abs(B) < tol)
 
+def laminate_notation(layers, symmetric, n):
+    seq = [str(int(layers[i]['theta'])) for i in range(n)]
+    return f"[{'/'.join(seq)}]s" if symmetric else f"[{'/'.join(seq)}]"
+
 # =========================================================
 # LAYOUT
 # =========================================================
 colL, colM, colR = st.columns([1,2,2])
 
 # =========================================================
-# MATERIAL
+# MATERIAL PANEL
 # =========================================================
 with colL:
-    st.markdown("## Material Properties")
+    st.markdown("## Material")
 
-    E1 = st.number_input("E₁ (GPa)", value=150.0)
-    E2 = st.number_input("E₂ (GPa)", value=20.0)
-    G12 = st.number_input("G₁₂ (GPa)", value=5.0)
-    nu12 = st.number_input("ν₁₂", value=0.27)
+    mat_choice = st.selectbox("Select Material", ["Custom"] + list(MATERIAL_DB.keys()))
+
+    if mat_choice != "Custom":
+        E1_def, E2_def, G12_def, nu12_def = MATERIAL_DB[mat_choice]
+    else:
+        E1_def, E2_def, G12_def, nu12_def = 25.000, 1.000, 0.500, 0.270
+
+    E1 = st.number_input("E₁ (GPa)", value=E1_def, format="%.3f")
+    E2 = st.number_input("E₂ (GPa)", value=E2_def, format="%.3f")
+    G12 = st.number_input("G₁₂ (GPa)", value=G12_def, format="%.3f")
+    nu12 = st.number_input("ν₁₂", value=nu12_def, format="%.3f")
 
 # =========================================================
 # STACKING
 # =========================================================
 with colM:
-    st.markdown("## Laminate Definition")
+    st.markdown("## Laminate")
 
     cA,cB,cC = st.columns(3)
-    num_layers = cA.number_input("Layers",1,20,4)
+    n = cA.number_input("Layers",1,20,4)
     symmetric = cB.checkbox("Symmetric", True)
-    same_t = cC.checkbox("Same thickness", True)
+    same_t = cC.checkbox("Same t", True)
 
-    st.markdown("### Stacking Sequence (Top → Mid-plane)")
+    st.markdown("### Stacking Sequence (Top → Bottom)")
 
-    base_t = st.number_input("Thickness (mm)", value=0.15)
+    base_t = st.number_input("Thickness (mm)", value=0.100, format="%.3f")
+
+
+    # HEADER
+    h1,h2,h3 = st.columns([1,1,1])
+    h1.markdown("**Ply**")
+    h2.markdown("**t (mm)**")
+    h3.markdown("**θ (deg)**")
+
+    subs = ["₁","₂","₃","₄","₅","₆","₇","₈","₉","₁₀"]
 
     layers=[]
+    for i in range(n):
+        c1,c2,c3 = st.columns([1,1,1])
+        c1.write(i+1)
 
-    for i in range(num_layers):
-        c1,c2 = st.columns([1,1])
+        t = base_t if same_t else c2.number_input(f"t{i}",0.100,key=f"t{i}")
+        if same_t: c2.write(f"{t:.3f}")
 
-        # Thickness
-        if same_t:
-            c1.write(f"t{i+1} = {base_t:.3f}")
-            t = base_t
-        else:
-            t = c1.number_input(f"t{i+1}", value=0.15, key=f"t{i}")
-
-        # Angle with subscript
-        theta = c2.number_input(
-            f"θ_{i+1} (deg)",
+        theta = c3.number_input(
+            f"θ{subs[i]}",
+            min_value=-360.0,
+            max_value=360.0,
             value=0.0,
+            step=1.0,
             key=f"th{i}"
         )
 
@@ -142,7 +175,14 @@ with colM:
     layers = build_symmetric_laminate(layers, symmetric)
 
     total_t = sum(l['t'] for l in layers)
-    st.caption(f"{len(layers)} plies | {total_t*1000:.2f} mm")
+    notation = laminate_notation(layers, symmetric, n)
+
+    st.markdown("---")
+    c1,c2 = st.columns(2)
+    c1.markdown(f"**Laminate:** `{notation}`")
+    c2.markdown(f"**Plies:** {len(layers)}")
+
+    st.markdown(f"**Total Thickness:** {total_t*1000:.3f} mm")
 
 # =========================================================
 # COMPUTE
@@ -150,49 +190,47 @@ with colM:
 A,B,D,h = compute_ABD(layers)
 is_sym = check_symmetry(B)
 
-Ex,Ey,Gxy,nuxy = engineering_constants(A,h)
-Exf,Eyf,Gxyf,_ = engineering_constants(D,h) if is_sym else (None,None,None,None)
+Qbar_mem = A / h
+Qbar_flex = (12 / (h**3)) * D
+
+Ex,Ey,Gxy,nuxy = engineering_constants_from_Q(Qbar_mem)
+
+if is_sym:
+    Exf,Eyf,Gxyf,_ = engineering_constants_from_Q(Qbar_flex)
+else:
+    Exf=Eyf=Gxyf=None
 
 # =========================================================
 # RESULTS
 # =========================================================
 with colR:
-
     st.markdown("## Results")
 
     unit = st.radio("Units", ["N/mm","N/m"], horizontal=True)
 
-    # STATUS
     if is_sym:
-        st.success("Symmetric laminate (B ≈ 0)")
+        st.success("Symmetric laminate")
     else:
         st.error("Unsymmetric laminate (B ≠ 0)")
-        st.warning("Extension-bending coupling present")
 
-    # -----------------------------
-    # ENGINEERING CONSTANTS
-    # -----------------------------
-    st.markdown("### Membrane Constants")
+    st.markdown("### Membrane")
 
     c1,c2,c3,c4 = st.columns(4)
-    c1.metric("Eₓ", f"{Ex/1e9:.2f} GPa")
-    c2.metric("Eᵧ", f"{Ey/1e9:.2f} GPa")
-    c3.metric("Gₓᵧ", f"{Gxy/1e9:.2f} GPa")
+    c1.metric("Eₓ(GPa)", f"{Ex/1e9:.2f}")
+    c2.metric("Eᵧ(GPa)", f"{Ey/1e9:.2f}")
+    c3.metric("Gₓᵧ(GPa)", f"{Gxy/1e9:.2f}")
     c4.metric("νₓᵧ", f"{nuxy:.3f}")
 
-    st.markdown("### Flexural Constants")
+    st.markdown("### Flexural")
 
     if is_sym:
         c5,c6,c7 = st.columns(3)
-        c5.metric("Eₓᶠ", f"{Exf/1e9:.2f} GPa")
-        c6.metric("Eᵧᶠ", f"{Eyf/1e9:.2f} GPa")
-        c7.metric("Gₓᵧᶠ", f"{Gxyf/1e9:.2f} GPa")
+        c5.metric("Eₓᶠ(GPa)", f"{Exf/1e9:.2f}")
+        c6.metric("Eᵧᶠ(GPa)", f"{Eyf/1e9:.2f}")
+        c7.metric("Gₓᵧᶠ(GPa)", f"{Gxyf/1e9:.2f}")
     else:
-        st.info("Flexural constants not valid for unsymmetric laminates")
+        st.warning("Not valid for unsymmetric laminate")
 
-    # -----------------------------
-    # ABD
-    # -----------------------------
     st.markdown("### ABD Matrices")
 
     def scale(name,M):
@@ -205,33 +243,19 @@ with colR:
                    (M,"N") if name=="B" else \
                    (M,"N·m")
 
-    for name,M in zip(["A","B","D"],[A,B,D]):
+    idx_map = ["1","2","6"]
+
+    for k,(name,M) in enumerate(zip(["A","B","D"],[A,B,D])):
+
+        if k > 0:
+            st.markdown("---")   # separator line
+
         Mscaled,u = scale(name,M)
         st.markdown(f"**{name} ({u})**")
 
         for i in range(3):
             cols = st.columns(3)
             for j in range(3):
-                cols[j].write(f"{Mscaled[i,j]:.2f}")
-
-    # -----------------------------
-    # EXPORT
-    # -----------------------------
-    st.markdown("### Export")
-
-    ABD = np.block([[A,B],[B,D]])
-
-    st.download_button(
-        "Download CSV",
-        pd.DataFrame(ABD).to_csv().encode(),
-        "ABD.csv"
-    )
-
-    def to_latex(M,name):
-        return name+" = \\begin{bmatrix}\n"+\
-               "\\\\\n".join([" & ".join([f"{v:.2e}" for v in r]) for r in M])+\
-               "\n\\end{bmatrix}"
-
-    latex = to_latex(A,"A")+"\n\n"+to_latex(B,"B")+"\n\n"+to_latex(D,"D")
-
-    st.download_button("Download LaTeX", latex, "ABD.tex")
+                label = f"{name}{idx_map[i]}{idx_map[j]}"
+                value = f"{Mscaled[i,j]:.2f}"
+                cols[j].metric(label, value)
