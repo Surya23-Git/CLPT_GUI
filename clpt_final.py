@@ -123,9 +123,9 @@ if same_m:
 # =========================================================
 # RESET
 # =========================================================
-if st.sidebar.button("Reset Table"):
-    st.session_state.df = None
-    st.rerun()
+# if st.sidebar.button("Reset Table"):
+#     st.session_state.df = None
+#     st.rerun()
 
 # =========================================================
 # SESSION INIT
