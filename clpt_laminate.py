@@ -135,7 +135,7 @@ with colM:
     cA,cB,cC = st.columns(3)
     n = cA.number_input("Layers",1,20,4)
     symmetric = cB.checkbox("Symmetric", True)
-    same_t = cC.checkbox("Same t", True)
+    same_t = cC.checkbox("same thickness", True)
 
     st.markdown("### Stacking Sequence (Top → Bottom)")
 
